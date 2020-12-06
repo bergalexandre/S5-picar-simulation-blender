@@ -127,7 +127,7 @@ class bille2D():
 
             #si self.z > deltaH, changer la direction en X
             self.zLimit = hauteurMax
-            self.xLimit = (self.deltaHFinal/np.sin(self.angle))
+            self.xLimit = (self.deltaHFinal/np.tan(self.angle))
             if(self.z>=hauteurMax):
                 self.directionX = -self.directionX
                 self.xLimit = 0.0
@@ -206,4 +206,4 @@ def test():
     #print(f"Vitesse en y = {vitesse[1]}")
     #print(f"norme = {np.sqrt(vitesse[0]**2 + vitesse[1]**2)}")
 
-test() #pour afficher les graphiques, parcontre ça marche pas avec blender donc commenter
+#test() #pour afficher les graphiques, parcontre ça marche pas avec blender donc commenter
