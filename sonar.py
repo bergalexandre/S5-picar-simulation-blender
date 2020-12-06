@@ -1,6 +1,6 @@
 import numpy as np
-import matplotlib.image as mpimg
-import matplotlib.pyplot as plt
+#import matplotlib.image as mpimg
+#import matplotlib.pyplot as plt
 import time
 import bpy
 import os
@@ -10,7 +10,7 @@ from threading import Thread
 
 import sys
 #sinon il trouvera pas les modules custom si on change pas son path d'import
-sys.path.insert(0, r"C:\Users\alexandre.bergeron\OneDrive - USherbrooke\university\projet\S5_projet_simulation")
+sys.path.insert(0, r"C:\Users\Alexandre.Bergeron\OneDrive - USherbrooke\university\projet\S5_projet_simulation")
 from bille import BilleMath
 import creationLigne
 
@@ -46,6 +46,10 @@ class blenderObject():
             self.blenderObj.location = tuple(self.position/self.scale)
             self.blenderObj.keyframe_insert(data_path="location", index=-1)
             self.blenderObj.animation_data.action.fcurves[-1].keyframe_points[-1].interpolation = 'LINEAR'
+            mat = bpy.data.materials.new(name=self.name+self.name_2)
+            mat.diffuse_color = (1,1,1, 1)
+            self.blenderObj.data.materials.append(mat)
+            bpy.data.materials.get(self.name+self.name_2).keyframe_insert(data_path="diffuse_color", index=-1)
     
     def mouvementLocal(self, deltaPosition):
         if self.scene is not None:
@@ -66,6 +70,15 @@ class blenderObject():
     def show(self, fig, ax):
         ax.plot(self.position[0], self.position[1], "xr")
 
+    
+    def couleurRouge(self):
+        bpy.data.materials.get(self.name+self.name_2).diffuse_color = (1, 0, 0, 1)
+        bpy.data.materials.get(self.name+self.name_2).keyframe_insert(data_path="diffuse_color", index=-1)
+
+    def couleurVert(self):
+        bpy.data.materials.get(self.name+self.name_2).diffuse_color = (0, 1, 0, 1)
+        bpy.data.materials.get(self.name+self.name_2).keyframe_insert(data_path="diffuse_color", index=-1)
+
 
 
 class vehicule(blenderObject):
@@ -84,6 +97,9 @@ class vehicule(blenderObject):
         #déterminer accélération x et y pis shooter ça à bille
         #je pense que deltaposition serait une accélération en fait
         self.bille.bougeBille(deltaPosition)
+    
+    def detection(self, listeObj):
+
         
 
 class bille(blenderObject):
@@ -116,7 +132,12 @@ class DetecteurLigne(blenderObject):
         self.ligne = ligne 
 
     def detection(self):
-        return self.ligne.estDansLigne(self.position)
+        detect = self.ligne.estDansLigne(self.position)
+        if(detect == 1):
+            self.couleurVert()
+        else:
+            self.couleurRouge()
+        return detect
 
 #représente le module avec les 5 détecteurs
 class CapteurLigne(blenderObject):
@@ -196,7 +217,7 @@ class blenderManager(Thread):
         bpy.context.scene.frame_end = int(secondes*self.framerate)
 
         #crée la ligne
-        ligne = creationLigne.Ligne(nomDeLigne, getattr(creationLigne, nomDeLigne), 4)
+        ligne = creationLigne.Ligne(nomDeLigne, getattr(creationLigne, nomDeLigne), 0.6)
         self.vehicule.suiveurligne.configureLigne(ligne)
 
 
