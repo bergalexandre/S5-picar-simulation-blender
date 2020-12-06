@@ -1,12 +1,14 @@
 import numpy as np
-import matplotlib.image as mpimg
-import matplotlib.pyplot as plt
+#import matplotlib.image as mpimg
+#import matplotlib.pyplot as plt
 import time
 import bpy
 import os
 import time
 from pathlib import Path
 from threading import Thread
+import math
+from mathutils import Matrix
 
 class blenderObject():
     scale = 1
@@ -42,7 +44,6 @@ class blenderObject():
             self.blenderObj.location = tuple(self.position/self.scale)
             self.blenderObj.keyframe_insert(data_path="location", index=-1)
             self.blenderObj.animation_data.action.fcurves[-1].keyframe_points[-1].interpolation = 'LINEAR'
-            
 
     def show(self, fig, ax):
         ax.plot(self.position[0], self.position[1], "xr")
@@ -171,11 +172,31 @@ class blenderManager(Thread):
     def run(self):
         nombreStepAvantLaFin = self.framerate*self._tempsDeSimulation
         nombreStep = 0
+        startTurn = 0
+        tempsEcoule = time.time()
     
         while(nombreStep < nombreStepAvantLaFin):
             start = time.time()
+            distanceX = 0
             if self._avance:
-                distance = (self._foward_speed)*self._step*self._circonference_roue*self._rpsMax
+                if self._tourne:
+                    if(self._rotationServo > 90):
+                        radius = 0.15/np.sin(180-self._rotationServo) 
+                        omega = ((self._foward_speed)*self._step*self._circonference_roue*self._rpsMax) / radius
+                        degreeSec = np.degrees(omega)
+                        distance = (np.cos(degreeSec*startTurn)) * self._step
+                        distanceX = -(np.sin(degreeSec*startTurn)) * self._step
+                    else:
+                        radius = 0.15/np.sin(self._rotationServo) 
+                        omega = ((self._foward_speed)*self._step*self._circonference_roue*self._rpsMax) / radius
+                        degreeSec = np.degrees(omega)
+                        distance = (np.cos(degreeSec*startTurn)) * self._step
+                        distanceX = np.abs((np.sin(degreeSec*startTurn))) * self._step
+
+                    startTurn += tempsEcoule
+                    print(distance, distanceX)
+                else:
+                    distance = (self._foward_speed)*self._step*self._circonference_roue*self._rpsMax
             elif self._recule:
                 distance = -(self._foward_speed)*self._step*self._circonference_roue*self._rpsMax
             elif self._stop:
@@ -183,10 +204,9 @@ class blenderManager(Thread):
             else:
                 raise Exception("Aucun mode active pour la classe blenderManager")
             
-
-
+            
             #pas de rotation pour le moment à prendre en compte, donc je vais juste mettre la vitesse dans le y
-            position = np.array([0, distance, 0])
+            position = np.array([distanceX, distance, 0])
             self.vehicule.mouvementLocal(position)
 
             nombreStep += 1
@@ -200,28 +220,41 @@ class blenderManager(Thread):
 
             #maintenant qu'on a la distance, le convertir en x, y et z
 
-
-
     def forward(self):
         self._avance = True
         self._stop = False
         self._recule = False
+        self._tourne = False
     
     def backward(self):
         self._avance = False
         self._stop = False
         self._recule = True
+        self._tourne = False
 
     def stop(self):
         self._avance = False
         self._stop = True
         self._recule = False
+        self._tourne = False
+
+    def turnForward(self):
+        self._avance = True
+        self._stop = False
+        self._recule = False
+        self._tourne = True
 
     #vitesse de 0 à 100
     def set_speed(self, speed):
         if(speed < 0 or speed > 100):
             raise Exception(f"Vitesse invalide dans set_speed({speed})")
         self._foward_speed = speed/100
+    
+    #angle de 45 à 135
+    def turn(self, angle):
+        if(angle < 45 or angle > 135):
+            raise Exception(f"Angle invalide dans turn({angle})")
+        self._rotationServo = angle
 
 
 #L = capteur_sonar.Check(objlist)
@@ -229,17 +262,15 @@ class blenderManager(Thread):
 
 blender = blenderManager(60)
 blender.start()
-blender.forward()
 blender.set_speed(100)
+blender.turnForward()
+blender.turn(45)
 time.sleep(5)
 blender.stop()
 time.sleep(2)
-blender.backward()
-time.sleep(13)
-blender.set_speed(50)
-blender.forward()
-time.sleep(10)
-blender.set_speed(20)
+blender.turnForward()   
+blender.turn(135)
+time.sleep(5)
 blender.join()
 
 print("fini")
