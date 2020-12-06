@@ -69,16 +69,19 @@ def crochet(x):
 def test(x, y, ligne):
     print(f"[{x}, {y}] est: {True if ligne.estDansLigne([x, y]) == 1 else False}")    
 
-ligne = Ligne("test", crochet, 0.02)
 
+def tests():
+    ligne = Ligne("test", crochet, 0.02)
 
-test(0.005, 0.005, ligne)
-test(0.01, 0.01, ligne)
-test(-0.005, 0.005, ligne)
-test(0.005, -0.005, ligne)
-test(0.0, 0.0, ligne)
-test(0.011, 0.011, ligne)
-test(0.003, 0.005, ligne)
-test(0.012, 0.005, ligne)
-test(0.012, 0.012, ligne)
-test(0.0, 0.015, ligne)
+    test(0.005, 0.005, ligne)
+    test(0.01, 0.01, ligne)
+    test(-0.005, 0.005, ligne)
+    test(0.005, -0.005, ligne)
+    test(0.0, 0.0, ligne)
+    test(0.011, 0.011, ligne)
+    test(0.003, 0.005, ligne)
+    test(0.012, 0.005, ligne)
+    test(0.012, 0.012, ligne)
+    test(0.0, 0.015, ligne)
+
+#tests
