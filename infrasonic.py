@@ -30,7 +30,7 @@ class Infrasonic():
             angleOffset = 3*np.pi/2
         
 
-        pentes = abs(positionSonar - milieuVehicule)
+        pentes = positionSonar - milieuVehicule
         rotationActuelle = 0
         try:
             rotationActuelle = np.arctan(pentes[1]/pentes[0])
@@ -81,8 +81,8 @@ class Infrasonic():
 
 def test():
     import matplotlib.pyplot as plt
-    positionOrigine = np.array([-3, 3, 0])
-    positionCapteur = np.array([-3.5, 3.5, 0])
+    positionOrigine = np.array([-3, -3, 0])
+    positionCapteur = np.array([-3.5, -3.5, 0])
 
     sonar = Infrasonic(positionCapteur, positionOrigine)
 
