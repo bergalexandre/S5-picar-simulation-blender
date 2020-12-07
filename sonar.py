@@ -27,7 +27,7 @@ class blenderObject():
     angle = 0
     _dernierePosition = np.array([0,0,0])
 
-    def __init__(self, x, y, z, name="undefined", scene=None):
+    def __init__(self, x, y, z, name="undefined", scene=None, parent=None):
         self.position = np.array([x*self.scale, y*self.scale, z*self.scale], dtype=np.float)
         self.name = name
         self.scene = scene
@@ -45,8 +45,14 @@ class blenderObject():
             #place l'objet à son point de départ
             self.scene.frame_set(self.frameNb)
             self.blenderObj.location = tuple(self.position/self.scale)
-            self.blenderObj.keyframe_insert(data_path="location", index=-1)
-            self.blenderObj.animation_data.action.fcurves[-1].keyframe_points[-1].interpolation = 'LINEAR'
+            if(parent is not None):
+                self.blenderObj.parent = parent
+                self.blenderObj.matrix_parent_inverse = parent.matrix_world.inverted()
+            else:
+                self.blenderObj.location = tuple(self.position/self.scale)
+                self.blenderObj.keyframe_insert(data_path="location", index=-1)
+                self.blenderObj.animation_data.action.fcurves[-1].keyframe_points[-1].interpolation = 'LINEAR'
+
             mat = bpy.data.materials.new(name=self.name+self.name_2)
             mat.diffuse_color = (1,1,1, 1)
             self.blenderObj.data.materials.append(mat)
@@ -94,10 +100,14 @@ class blenderObject():
             self.blenderObj.keyframe_insert(data_path="rotation_euler", index=-1)
 
     def couleurRouge(self):
+        self.frameNb += 1
+        self.scene.frame_set(self.frameNb)
         bpy.data.materials.get(self.name+self.name_2).diffuse_color = (1, 0, 0, 1)
         bpy.data.materials.get(self.name+self.name_2).keyframe_insert(data_path="diffuse_color", index=-1)
 
     def couleurVert(self):
+        self.frameNb += 1
+        self.scene.frame_set(self.frameNb)
         bpy.data.materials.get(self.name+self.name_2).diffuse_color = (0, 1, 0, 1)
         bpy.data.materials.get(self.name+self.name_2).keyframe_insert(data_path="diffuse_color", index=-1)
     
@@ -139,33 +149,20 @@ class vehicule(blenderObject):
 
     def __init__(self, x,y,z,scene):
         super().__init__(x,y,z, "vehicule", scene)
-        self.bille = bille(x+self.length+0.005, y, z+0.020, scene)
-        self.sonar = sonar(x+self.length+0.065, y, z+0.05, scene)
-        self.suiveurligne = CapteurLigne(x+self.length+0.065, y, z, scene)
+        self.bille = bille(x-0.005, y, z+0.020, scene, self.blenderObj)
+        self.sonar = sonar(x-0.065, y, z+0.05, scene, self.blenderObj)
+        self.suiveurligne = CapteurLigne(x-0.065, y, z, scene, self.blenderObj)
         #ajout du sonar à l'avant
     
     def rotation(self, angle):
         if(self.angle != angle):
             super().rotation(angle)
-            #diff angle
-            diff_angle = self.angle-sonar.angle
-            #rotation des sous objets
-            self.sonar.rotation(angle)
-            self.bille.rotation(angle)
-            self.suiveurligne.rotation(angle)
-            #translation des objets
-            #si on a fait une rotation de 90, il faut bouger du rayon
-            deltaPosition = [self.length+0.065, 0, 0]
-            self.matriceRotation(deltaPosition, diff_angle)
-            self.sonar.mouvementLocal(deltaPosition)
 
     def mouvementLocal(self, deltaPosition, omega=0, t=0):
         #deltaPosition est l'équivalent du backwheel pour le véhicule
         super().mouvementLocal(deltaPosition)
         self.mouvementFrontwheel(omega, t)
         self.rotation(self.determineAngle())
-        self.sonar.mouvementLocal(deltaPosition)
-        self.suiveurligne.mouvementLocal(deltaPosition)
 
         #déterminer accélération x et y pis shooter ça à bille
         #je pense que deltaposition serait une accélération en fait
@@ -197,8 +194,8 @@ class vehicule(blenderObject):
 
 class bille(blenderObject):
 
-    def __init__(self, x, y, z, scene):
-        super().__init__(x, y, z, "bille", scene)
+    def __init__(self, x, y, z, scene, parent):
+        super().__init__(x, y, z, "bille", scene, parent)
         self._vielleVitesse = np.array([0,0])
         self.billeMath = BilleMath(scene.render.fps)
         #qu'est-ce qu'on a besoin de savoir? Accélération en x et y? angle en z? faire le z ou pas?
@@ -213,19 +210,14 @@ class bille(blenderObject):
             self.billeMath.appliqueAcceleration(Y_vitesse=vitesseCourante[1]*self.scene.render.fps)
         
         positionBille = self.billeMath.updatePosition()
-        self.mouvementLocal(deltaPosition)
         self.ajouteOffset(positionBille)
 
 class DetecteurLigne(blenderObject):
-
-    def __init__(self, x, y, z, scene):
-        super().__init__(x, y, z, "undefined", scene)
-
     def configureLigne(self, ligne):
         self.ligne = ligne 
 
     def detection(self):
-        detect = self.ligne.estDansLigne(self.position)
+        detect = self.ligne.estDansLigne(np.asarray(self.blenderObj.location))
         if(detect == 1):
             self.couleurVert()
         else:
@@ -234,14 +226,14 @@ class DetecteurLigne(blenderObject):
 
 #représente le module avec les 5 détecteurs
 class CapteurLigne(blenderObject):
-    def __init__(self, x, y, z, scene):
-        super().__init__(x, y, z, "undefined", scene)
+    def __init__(self, x, y, z, scene, parent):
+        super().__init__(x, y, z, "undefined", scene, parent)
         self.detecteurs = []
-        self.detecteurs.append(DetecteurLigne(x, y-0.06, z, scene))
-        self.detecteurs.append(DetecteurLigne(x, y-0.03, z, scene))
-        self.detecteurs.append(DetecteurLigne(x, y, z, scene))
-        self.detecteurs.append(DetecteurLigne(x, y+0.03, z, scene))
-        self.detecteurs.append(DetecteurLigne(x, y+0.06, z, scene))
+        self.detecteurs.append(DetecteurLigne(x, y-0.06, z, scene=scene, parent=parent))
+        self.detecteurs.append(DetecteurLigne(x, y-0.03, z, scene=scene, parent=parent))
+        self.detecteurs.append(DetecteurLigne(x, y, z, scene=scene, parent=parent))
+        self.detecteurs.append(DetecteurLigne(x, y+0.03, z, scene=scene, parent=parent))
+        self.detecteurs.append(DetecteurLigne(x, y+0.06, z, scene=scene, parent=parent))
     
     def mouvementLocal(self, deltaPosition):
         super().mouvementLocal(deltaPosition)
@@ -266,8 +258,8 @@ class CapteurLigne(blenderObject):
 
 
 class sonar(blenderObject): 
-    def __init__(self, x, y, z, scene):
-        super().__init__(x,y,z, "undefined", scene)
+    def __init__(self, x, y, z, scene, parent):
+        super().__init__(x,y,z, "undefined", scene, parent)
         self.max_range = 4.5*self.scale #mètre
         self.angle = 30 # angle en degrées
         self.precision = 0.01*self.scale
@@ -309,8 +301,17 @@ class blenderManager(Thread):
         bpy.ops.object.delete(use_global=True, confirm=False)
         #load blender scene
         scene = bpy.context.scene
+
         if scene is not None:
             scene.render.fps = self.framerate
+            for material in bpy.data.materials:
+                material.user_clear()
+                bpy.data.materials.remove(material)
+            
+            for obj in bpy.data.objects:
+                obj.user_clear()
+                bpy.data.objects.remove(obj)
+
         self.vehicule = vehicule(0, 0, 0, scene)
         bpy.context.scene.frame_end = int(secondes*self.framerate)
         
@@ -388,9 +389,9 @@ class blenderManager(Thread):
 #print(f"obstacle detecte a {L}m")
 
 blender = blenderManager(10, "crochet")
-blender.vehicule.rotation(np.radians(90))
+blender.vehicule.rotation(np.radians(0))
 blender.turn(90)
-blender.set_speed(80)
+blender.set_speed(20)
 blender.start()
 blender.forward()
 for i in range(10):
