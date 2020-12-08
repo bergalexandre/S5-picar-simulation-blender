@@ -5,8 +5,9 @@ import time
 import bpy
 import os
 import time
+import copy
 from pathlib import Path
-from threading import Thread
+from threading import Thread, Lock
 
 import sys
 #sinon il trouvera pas les modules custom si on change pas son path d'import
@@ -14,23 +15,25 @@ sys.path.insert(0, r"C:\Users\Alexandre.Bergeron\OneDrive - USherbrooke\universi
 from bille import BilleMath
 import creationLigne
 
-
 #### Tout ce qui a trait à blender ####
+blenderMutex = Lock()
+frameNb = 0
 
 class blenderObject():
     scale = 1
     radius = 2
     name = "undefined" #name of the blender object
     name_2 = ""
-    frameNb = 0
     framerate = 100 #besoin de savoir ça?
     angle = 0
     _dernierePosition = np.array([0,0,0])
+    disableRotation = False
 
     def __init__(self, x, y, z, name="undefined", scene=None, parent=None):
         self.position = np.array([x*self.scale, y*self.scale, z*self.scale], dtype=np.float)
         self.name = name
         self.scene = scene
+        self.parent = parent
         if scene is not None:
             i = 1
             while(self.name + self.name_2 in bpy.data.objects):
@@ -43,7 +46,8 @@ class blenderObject():
             self.blenderObj.animation_data_clear()
         
             #place l'objet à son point de départ
-            self.scene.frame_set(self.frameNb)
+            global frameNb
+            self.scene.frame_set(frameNb)
             self.blenderObj.location = tuple(self.position/self.scale)
             if(parent is not None):
                 self.blenderObj.parent = parent
@@ -73,48 +77,60 @@ class blenderObject():
 
     def mouvementLocal(self, deltaPosition):
         if self.scene is not None:
-            self.frameNb += 1
-            self.scene.frame_set(self.frameNb)
-            deltaPosition = self.matriceRotation(deltaPosition, self.angle)
+            blenderMutex.acquire()
+            global frameNb
+            self.scene.frame_set(frameNb)
             self._dernierePosition = self.position
             self.position += deltaPosition
             self.blenderObj.location = tuple(self.position/self.scale)
             self.blenderObj.keyframe_insert(data_path="location", index=-1)
             self.blenderObj.animation_data.action.fcurves[-1].keyframe_points[-1].interpolation = 'LINEAR'
+            blenderMutex.release()
     
     def ajouteOffset(self, offset):
         if self.scene is not None:
-            offset = self.matriceRotation(offset, self.angle)
+            blenderMutex.acquire()
+            offset = offset
             position = self.position + offset
             self.blenderObj.location = tuple(position/self.scale)
             self.blenderObj.keyframe_insert(data_path="location", index=-1)
             self.blenderObj.animation_data.action.fcurves[-1].keyframe_points[-1].interpolation = 'LINEAR'
+            blenderMutex.release()
 
     def show(self, fig, ax):
         ax.plot(self.position[0], self.position[1], "xr")
 
     def rotation(self, angle):
         if self.scene is not None:
-            self.blenderObj.rotation_euler[2] = -angle
-            self.angle = angle
+            blenderMutex.acquire()
+            self.blenderObj.rotation_euler[2] = angle
             self.blenderObj.keyframe_insert(data_path="rotation_euler", index=-1)
+            blenderMutex.release()
+
+    def enregistreRotation(self):
+        if self.scene is not None:
+            blenderMutex.acquire()
+            self.blenderObj.keyframe_insert(data_path="rotation_euler", index=-1)
+            blenderMutex.release()
 
     def couleurRouge(self):
-        self.frameNb += 1
-        self.scene.frame_set(self.frameNb)
+        blenderMutex.acquire()
+        global frameNb
+        self.scene.frame_set(frameNb)
         bpy.data.materials.get(self.name+self.name_2).diffuse_color = (1, 0, 0, 1)
         bpy.data.materials.get(self.name+self.name_2).keyframe_insert(data_path="diffuse_color", index=-1)
+        blenderMutex.release()
 
     def couleurVert(self):
-        self.frameNb += 1
-        self.scene.frame_set(self.frameNb)
+        blenderMutex.acquire()
+        global frameNb
+        self.scene.frame_set(frameNb)
         bpy.data.materials.get(self.name+self.name_2).diffuse_color = (0, 1, 0, 1)
         bpy.data.materials.get(self.name+self.name_2).keyframe_insert(data_path="diffuse_color", index=-1)
+        blenderMutex.release()
     
     #compare avec la dernière position connu
-    def determineAngle(self):
-        A = self._dernierePosition
-        B = self.position
+    def determineAngle(self, A, B):
 
         if (B[0]-A[0] == 0 and B[1]-A[1] == 0):
             return self.angle
@@ -146,31 +162,28 @@ class blenderObject():
 
 class vehicule(blenderObject):
     length = 0.15
-
+    
     def __init__(self, x,y,z,scene):
         super().__init__(x,y,z, "vehicule", scene)
         self.bille = bille(x-0.005, y, z+0.020, scene, self.blenderObj)
         self.sonar = sonar(x-0.065, y, z+0.05, scene, self.blenderObj)
         self.suiveurligne = CapteurLigne(x-0.065, y, z, scene, self.blenderObj)
         #ajout du sonar à l'avant
-    
-    def rotation(self, angle):
-        if(self.angle != angle):
-            super().rotation(angle)
 
-    def mouvementLocal(self, deltaPosition, omega=0, t=0):
+    def mouvementLocal(self, deltaPosition, omega=0, t=0, rot=True):
         #deltaPosition est l'équivalent du backwheel pour le véhicule
+        if(rot is True):
+            deltaPosition = self.matriceRotation(deltaPosition, self.angle)
         super().mouvementLocal(deltaPosition)
         self.mouvementFrontwheel(omega, t)
-        self.rotation(self.determineAngle())
-
         #déterminer accélération x et y pis shooter ça à bille
         #je pense que deltaposition serait une accélération en fait
         self.bille.bougeBille(deltaPosition)
+        self.enregistreRotation()
     
     def mouvementFrontwheel(self, omega, t):
         fw_position = self.length*np.array([np.cos(omega*t), np.sin(omega*t), 0])
-        self.ajouteOffset(fw_position) #le point d'origine du vehicule blender est le milieu des frontwheels
+        self.ajouteOffset(self.matriceRotation(fw_position, self.angle)) #le point d'origine du vehicule blender est le milieu des frontwheels
 
     def virage(self, v, alpha, t):
         #https://math.stackexchange.com/questions/3055263/path-of-a-simple-turning-car
@@ -178,14 +191,21 @@ class vehicule(blenderObject):
         omega = v/self.length*np.tan(alpha)        
         vitesseAngulaire = v/omega if omega != 0.0 else 0
         position_BackWheel = vitesseAngulaire * np.array([np.sin(omega*t), 1-np.cos(omega*t), 0])
-        return position_BackWheel, omega
+        return self.matriceRotation(position_BackWheel, self.angle), omega
 
-    def avance(self, vitesse, angleRoue, t):
+    def avance(self, vitesse, angleRoue, t, T0):
         if(angleRoue == 0.0):
+            self.angle -= self.angleVirage
+            self.angleVirage = 0
             self.mouvementLocal([vitesse, 0, 0])
         else:
-            position_BackWheel, omega = self.virage(vitesse, angleRoue, t)
-            self.mouvementLocal(position_BackWheel, omega=omega, t=t)
+            self.disableRotation = True
+            position1 = self.position[:] #[:] pour forcer une copie des valeurs (sinon la valeur de la ref va changer)
+            position_BackWheel, omega = self.virage(vitesse*self.framerate, angleRoue, t)
+            position2 = (position_BackWheel+T0)-self.position
+            self.mouvementLocal(position2, omega=omega, t=t, rot=False)
+            self.angleVirage = omega*t
+            self.rotation(-self.angle + self.angleVirage)
 
     def detection(self, listeObj):
         pass
@@ -217,7 +237,10 @@ class DetecteurLigne(blenderObject):
         self.ligne = ligne 
 
     def detection(self):
-        detect = self.ligne.estDansLigne(np.asarray(self.blenderObj.location))
+        blenderMutex.acquire()
+        position = np.asarray(self.parent.location)+np.asarray(self.blenderObj.location)
+        blenderMutex.release()
+        detect = self.ligne.estDansLigne(position)
         if(detect == 1):
             self.couleurVert()
         else:
@@ -291,7 +314,7 @@ class blenderManager(Thread):
     _stop = True
     _recule = False
 
-
+    
     #l'argument secondes est la durée de la simulation
     def __init__(self, secondes, nomDeLigne):
         super().__init__()
@@ -313,13 +336,14 @@ class blenderManager(Thread):
                 bpy.data.objects.remove(obj)
 
         self.vehicule = vehicule(0, 0, 0, scene)
+        self.T0 = self.vehicule.position[:]
         bpy.context.scene.frame_end = int(secondes*self.framerate)
         
         self._nombreStep = 0
         self.turn(90)
 
         #crée la ligne
-        ligne = creationLigne.Ligne(nomDeLigne, getattr(creationLigne, nomDeLigne), 0.6)
+        ligne = creationLigne.Ligne(nomDeLigne, getattr(creationLigne, nomDeLigne), 2)
         self.vehicule.suiveurligne.configureLigne(ligne)
 
 
@@ -343,8 +367,9 @@ class blenderManager(Thread):
             
 
             t = (self._nombreStep - self._debutVirage)/self.framerate
-            self.vehicule.avance(vitesse, self._angleRoue, t)
-
+            self.vehicule.avance(vitesse, self._angleRoue, t, self.T0)
+            global frameNb
+            frameNb += 1
             self._nombreStep += 1
             tempsEcoule = time.time() - start
             if(tempsEcoule > 1/self.framerate):
@@ -356,7 +381,13 @@ class blenderManager(Thread):
 
             #maintenant qu'on a la distance, le convertir en x, y et z
 
-
+    def sleep(self, seconde):
+        global frameNb
+        target = (seconde*self.framerate)+frameNb
+        while(frameNb < target):
+            time.sleep(0.001)
+            if(self.is_alive() is not True):
+                return
 
     def forward(self):
         self._avance = True
@@ -384,18 +415,26 @@ class blenderManager(Thread):
             raise Exception(f"Angle invalide dans turn({angle})")
         self._angleRoue = np.radians(angle-90) #-90 pour centrer à 0
         self._debutVirage = self._nombreStep
+        self.T0 = copy.deepcopy(self.vehicule.position)
 
 #L = capteur_sonar.Check(objlist)
 #print(f"obstacle detecte a {L}m")
 
 blender = blenderManager(10, "crochet")
-blender.vehicule.rotation(np.radians(0))
-blender.turn(90)
+print("tourne de 45", f" temps = {frameNb}")
+blender.turn(135)
 blender.set_speed(20)
 blender.start()
 blender.forward()
-for i in range(10):
-    print(blender.read_digital())
-    time.sleep(1)
+blender.sleep(1)
+print("avance pour 5s", f" temps = {frameNb}")
+blender.turn(90)
+blender.set_speed(50)
+blender.forward()
+blender.sleep(5)
+print("tourne à 135", f" temps = {frameNb}")
+blender.turn(135)
+blender.set_speed(30)
+blender.forward()
 blender.join()
 print("fini")

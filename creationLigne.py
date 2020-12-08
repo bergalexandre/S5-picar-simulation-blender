@@ -56,7 +56,7 @@ class Ligne():
         longueur = position2[:2]-position1[:2]
         return np.sqrt(longueur[0]**2 + longueur[1]**2)
     
-    def estDansLigne2(self, position):
+    def estDansLigne(self, position):
         position = np.array(position)
         for face in self.faces:
             a = self.calculNorme(self.verts[face[0]], position)
@@ -76,28 +76,6 @@ class Ligne():
             if aireTotal in self.aires:
                 return 1
         
-        return 0
-
-    def estDansLigne(self, position):
-        x = position[0]
-        y = position[1]
-        taille = len(self.verts)-3
-            
-        for i in range(0, taille, 2):
-            longeur = self.verts[i+1][0] - self.verts[i][0]
-            largeur = self.verts[i+3][1] - self.verts[i][1]
-            aireTotal = abs(largeur*longeur)
-            triangles = [   [self.verts[i+1][0] - self.verts[i][0],   position[1] - self.verts[i+1][1]], 
-                            [self.verts[i+3][1] - self.verts[i][1],   position[0] - self.verts[i+3][0]], 
-                            [self.verts[i+2][1] - self.verts[i+1][1], position[0] - self.verts[i+2][0]], 
-                            [self.verts[i+3][0] - self.verts[i][0], position[1] - self.verts[i+3][1]]]
-            aireSomme = 0
-            for triangle in triangles:
-                aireSomme += abs(triangle[0]*triangle[1]/2)
-            
-            if(round(aireSomme, 6) == round(aireTotal, 6)):
-                return 1
-                
         return 0
 
     def matriceRotation(self, vecteur, angle):
@@ -122,7 +100,7 @@ def crochet(x):
 
 
 def test(x, y, ligne):
-    print(f"[{x}, {y}] est: {True if ligne.estDansLigne2([x, y]) == 1 else False}")    
+    print(f"[{x}, {y}] est: {True if ligne.estDansLigne([x, y]) == 1 else False}")    
 
 
 def tests():
