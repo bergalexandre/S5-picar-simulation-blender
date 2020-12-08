@@ -14,6 +14,7 @@ import sys
 sys.path.insert(0, r"C:\Users\Alexandre.Bergeron\OneDrive - USherbrooke\university\projet\S5_projet_simulation")
 from bille import BilleMath
 import creationLigne
+import infrasonic
 
 #### Tout ce qui a trait à blender ####
 blenderMutex = Lock()
@@ -285,16 +286,20 @@ class sonar(blenderObject):
         super().__init__(x,y,z, "undefined", scene, parent)
         self.max_range = 4.5*self.scale #mètre
         self.angle = 30 # angle en degrées
-        self.precision = 0.01*self.scale
+        self.precision = 0.01*self.scale       
 
-    def Check(self, blenderObjectList):
-        raise Exception("Sonar pas implémenté")
-        return -1 #dans la librairie, -1 est retourné s'il y a rien        
-
-    def show(self, fig, ax):
-        ax.set_title('sonar')
-        ax.imshow(self.onde)
-
+    def detection(self, listeObj):
+        blenderMutex.acquire()
+        positionRobot = np.asarray(self.parent.location)
+        positionSelf = np.asarray(self.blenderObj.location) + positionRobot
+        capteur = infrasonic.Infrasonic(positionRobot, positionSelf)
+        distanceList = []
+        for obj in listeObj:
+            D = capteur.estDansOnde(obj.position)
+            if(D != -1):
+                distanceList.append(D)
+        blenderMutex.release()
+        return min(distanceList) if len(distanceList)>0 else -1
 
 #gere la connection blender au script
 
@@ -339,6 +344,11 @@ class blenderManager(Thread):
         self.T0 = self.vehicule.position[:]
         bpy.context.scene.frame_end = int(secondes*self.framerate)
         
+        self.listeObj = []
+        self.listeObj.append(blenderObject(6, 0, 0, scene=scene))
+        self.listeObj.append(blenderObject(3, 3, 0, scene=scene))
+        self.listeObj.append(blenderObject(3, -3, 0, scene=scene))
+
         self._nombreStep = 0
         self.turn(90)
 
@@ -416,6 +426,9 @@ class blenderManager(Thread):
         self._angleRoue = np.radians(angle-90) #-90 pour centrer à 0
         self._debutVirage = self._nombreStep
         self.T0 = copy.deepcopy(self.vehicule.position)
+
+    def get_distance(self):
+        return self.vehicule.sonar.detection(self.listeObj)
 
 #L = capteur_sonar.Check(objlist)
 #print(f"obstacle detecte a {L}m")
