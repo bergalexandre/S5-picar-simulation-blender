@@ -51,13 +51,14 @@ class Ligne():
             self.faceDict[key] = self.classifieFaces(self.faceDict[key], 0.1, L, 1)
         #transformation en numpy arraay
 
-    #arrondie vers la bas au dixième près
+    #arrondie vers le haut au dixième près
     def round_up(self, n):
         if(n < 0):
             return (int(n*10)-1)/10
         else:
             return (int(n*10)+1)/10
     
+    #arrondie vers la bas au dixième près
     def round_down(self, n):
         if(n < 0):
             return (int(n*10)-1)/10
@@ -148,13 +149,26 @@ class Ligne():
 
         return vecteur
 
-#forme un crochet
+#forme un crochet (parcourt 1)
 def crochet(x):
     y = 0
     if(x <= 2):
         y = 0
     else:
         y = np.sin(x-2)
+    return y
+
+#forme un crochet inversé (parcourt 2)
+def crochet_negatif(x):
+    y = 0
+    if(x <= 2):
+        y = 0
+    else:
+        y = -np.sin(x-2)
+    return y
+
+#parcourt 3
+def ligne(x):
     return y
 
 def test(x, y, ligne):
@@ -185,4 +199,4 @@ def tests():
     test(8.75612, -4.91907, ligne)
     test(3.93757, -1.81637, ligne)
 
-tests()
+#tests()

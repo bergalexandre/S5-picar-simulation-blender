@@ -233,6 +233,7 @@ class bille(blenderObject):
         if(vitesseCourante[1] != self._vielleVitesse[1]):
             self.billeMath.appliqueAcceleration(Y_vitesse=vitesseCourante[1]*self.scene.render.fps)
         
+        self._vielleVitesse = vitesseCourante
         positionBille = self.billeMath.updatePosition()
         self.ajouteOffset(positionBille)
 
@@ -315,7 +316,7 @@ class blenderManager(Thread):
     _circonference_roue = 0.04*2*np.pi
     framerate = 100
     _step = 1/framerate #100 serait 100fps, donc 1 seconde.
-    _rpsMax = 4 # rotation par seconde à confirmer
+    _rpsMax = 0.20/_circonference_roue # rotation par seconde à confirmer
 
     #liste d'état
     _avance = False
@@ -325,13 +326,12 @@ class blenderManager(Thread):
     #pour la sim
     turning_max = 135
     
-    #_speed = 0
-    ## getter method to get the properties using an object
+    ## getter
     @property
     def speed(self):
         return self._foward_speed
 
-        #vitesse de 0 à 100
+    #Fonction(setter) pour ajuster la vitesse
     @speed.setter
     def speed(self, value):
         print(f"{frameNb} set_speed({value})")
@@ -364,9 +364,9 @@ class blenderManager(Thread):
         bpy.context.scene.frame_end = int(secondes*self.framerate)
         
         self.listeObj = []
-        #self.listeObj.append(blenderObject(6, 0, 0, scene=scene))
-        #self.listeObj.append(blenderObject(3, 3, 0, scene=scene))
-        #self.listeObj.append(blenderObject(3, -3, 0, scene=scene))
+        self.listeObj.append(blenderObject(1, 0, 0, name="obstacle", scene=scene))
+        self.listeObj.append(blenderObject(3, 3, 0, name="obstacle", scene=scene))
+        self.listeObj.append(blenderObject(3, -3, 0, name="obstacle", scene=scene))
 
         self._nombreStep = 0
         self.turn(90)
@@ -375,13 +375,13 @@ class blenderManager(Thread):
         ligne = creationLigne.Ligne(nomDeLigne, getattr(creationLigne, nomDeLigne), 10)
         self.vehicule.suiveurligne.configureLigne(ligne)
 
-
+    #lecture du capteur de ligne
     def read_digital(self):
         lecture = self.vehicule.suiveurligne.detection()
         print(f"{frameNb} {lecture} = read_digital()")
         return lecture
 
-
+    #Thread qui roule poiur la durée de la simulation. Son but est de comminiquer les informations aux classes simulés.
     def run(self):
         nombreStepAvantLaFin = self.framerate*self._tempsDeSimulation
     
@@ -407,11 +407,12 @@ class blenderManager(Thread):
                 #c'est peut-être juste un breakpoint aussi, donc pas d'exception on continue
                 pass
             else:
-                time.sleep((1/self.framerate)-tempsEcoule)
+                time.sleep((5/self.framerate)-tempsEcoule)
         self.stop()
         return frameNb, nombreStepAvantLaFin
             #maintenant qu'on a la distance, le convertir en x, y et z
 
+    #fonction qui permet de domir un temps X par rapport à la simulation et non au temps réel.
     def sleep(self, seconde):
         global frameNb
         target = (seconde*self.framerate)+frameNb
@@ -420,6 +421,7 @@ class blenderManager(Thread):
             if(self.is_alive() is not True):
                 raise Exception("La simulation est over")
 
+    #fonction qui permet d'avancer
     def forward(self):
         global frameNb
         print(f"{frameNb} forward()")
@@ -427,6 +429,7 @@ class blenderManager(Thread):
         self._stop = False
         self._recule = False
     
+    #fonction qui permet de reculer
     def backward(self):
         global frameNb
         print(f"{frameNb} backward()")
@@ -434,6 +437,7 @@ class blenderManager(Thread):
         self._stop = False
         self._recule = True
 
+    #fonction qui permet de stop les roues du véhicule
     def stop(self):
         global frameNb
         print(f"{frameNb} stop()")
@@ -441,6 +445,7 @@ class blenderManager(Thread):
         self._stop = True
         self._recule = False
 
+    #fonction qui permet d'ajuster un angle de virage
     def turn(self, angle):
         print(f"{frameNb} turn({angle})")
             #raise Exception(f"Angle invalide dans turn({angle})")
@@ -449,7 +454,7 @@ class blenderManager(Thread):
         self._debutVirage = self._nombreStep-1
         self.T0 = copy.deepcopy(self.vehicule.position)
 
-    #à cause que c'est une fonction de la doc...
+    #fonction qui attend de retrouver le centre de la ligne
     def wait_tile_center(self):
         global frameNb
         print(f"{frameNb} wait_tile_center()")
@@ -457,22 +462,28 @@ class blenderManager(Thread):
             lt_status = self.read_digital()
             if lt_status[2] == 1:
                 break
-            #if(self.is_alive() is not True):
-                #raise Exception("La simulation est over")
+            if(self.is_alive() is not True):
+                raise Exception("La simulation est over")
     
+    #fonction qui remet les roues droites
     def turn_straight(self):
         global frameNb
         print(f"{frameNb} turn_straight()")
         self.turn(90)
+        self.forward()
 
+    #fonction qui tourne à gauche au maximum
     def turn_left(self):
         global frameNb
         print(f"{frameNb} turn_left()")
+        self.forward()
         self.turn(135)
 
+    #fonction qui tourne à droite au maximum
     def turn_right(self):
         global frameNb
         print(f"{frameNb} turn_right()")
+        self.forward()
         self.turn(45)
 
     #fonction présente pour minimiser les changements dans le code du picar.
@@ -486,26 +497,19 @@ class blenderManager(Thread):
         #print(f"{self.frameNb}  {distance} = get_distance()")
         return distance
     
-    #fonction setup du pycar (rien à faire pour la sim)
+    #fonction présente pour minimiser les changements dans le code du picar.
     def setup(self):
         pass
 
 
 def test():
-    blender = blenderManager(10, "crochet")
+    blender = blenderManager(8, "crochet")
     print("tourne de 45", f" temps = {frameNb}")
-    blender.turn(135)
-    blender.speed = 20
+    blender.turn(90)
+    blender.speed = 100
     blender.start()
     blender.forward()
     blender.sleep(1)
-    blender.turn(45)
-    blender.sleep(1)
-    blender.sleep(1)
-    blender.turn(45)
-    blender.sleep(1)
-    blender.turn(70)
-    blender.sleep(1)
-    blender.turn(91)
+    blender.stop()
 
-test()
+#test()

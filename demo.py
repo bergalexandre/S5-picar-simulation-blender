@@ -45,6 +45,7 @@ fw = front_wheels
 bw = back_wheels
 lf = Line_Follower
 ua = Ultrasonic_Avoidance
+picar = sim
 
 lf.references = REFERENCES
 fw.ready()
@@ -60,7 +61,7 @@ d_step = 45
 force_turning = 2    # 0 = random direction, 1 = force left, 2 = force right, 3 = orderdly
 
 
-turn_distance = 3
+turn_distance = 0.1
 
 timeout = 10
 last_angle = 90
@@ -70,16 +71,12 @@ class active_moving():
 	input = ''
 	turning_angle = 40
 	off_track_count = 0
-	max_off_track_count = 40
+	max_off_track_count = 1000
 
-	def __init__(self, sim=False):
+	def __init__(self):
+		picar.setup()
 		bw.start()
-		fw.turn(90)
-		bw.set_speed( 20)
-		bw.forward()
-		time.sleep(0.01)
-		bw.set_speed( 0)
-		bw.stop()
+		bw.speed = 0
 
 	def run(self):
 		
@@ -94,8 +91,13 @@ class active_moving():
 				self.sortie()
 				
 			self.follow()
-			#self.avoid()
+			self.avoid()
 			time.sleep(delay)
+
+			line = lf.read_digital()
+			if all(line):
+				bw.stop()
+				break
 
 		bw.stop()
 
@@ -104,30 +106,24 @@ class active_moving():
 
 	def turn(self, angle):
 		fw.turn(angle)
-		#self.fw.turn(angle//4)
-		#self.fw.turn((angle//4) * 2)
-		#self.fw.turn((angle//4) * 3)
-		#self.fw.turn(angle)
 
 	def accelerate(self, s):
 		bw.forward()
-		bw.set_speed( s)
-		#inter = s - self.bw._speed
-		#inter = inter // 4
-		#self.bw.set_speed( self.bw._speed + inter
-		#self.bw.set_speed( self.bw._speed + inter
-		#self.bw.set_speed( self.bw._speed + inter
-		#self.bw.set_speed( self.bw._speed + inter
+		bw.speed = s
 
-	def go(self, d, f=True):
+	def go(self, d, f=True, v=forward_speed):
 		cm_per_s = 11.5
+		t = d/cm_per_s
+
+		bw.speed = v
+		
 		if f:
 			bw.forward()
 		else:
 			bw.backward()
 
-		bw.set_speed( 50) 
-		time.sleep(d/cm_per_s)
+		time.sleep(t)
+
 		bw.stop()
 
 	def turn90(self, R=True):
@@ -135,10 +131,12 @@ class active_moving():
 			fw.turn_right()
 		else:
 			fw.turn_left()
-		self.go(30)
+
+		self.go(38)
+		bw.stop()
+		fw.turn_straight()
 		
 	def follow(self):
-		self.accelerate(forward_speed)
 		lt_status_now = lf.read_digital()
 		# Angle calculate
 		if	lt_status_now == [0,0,1,0,0]:
@@ -186,42 +184,72 @@ class active_moving():
 			self.off_track_count = 0
 
 		self.turn(self.turning_angle)
+		self.accelerate(forward_speed)
 
 	def sortie(self):
-		bw.stop()
+		time.sleep(2)
+
+		#maneuvres d'évasion
 		self.turn90(R=False)
+		time.sleep(2.5)
+
 		self.turn90()
-		self.go(20)
+		time.sleep(2.5)
+
+		#cherche la ligne
 		fw.turn_right()
-		bw.set_speed( 25)
+		self.go(34)
+		
+		bw.speed = 25
+		bw.forward()
 
 		line = lf.read_digital()
-		while line[0] or line[1] or line[2] or line[3] or line[4] != 1:
+		while any(line):
 			line = lf.read_digital()
 
 		bw.stop()
-
+		time.sleep(1)
 
 	def avoid(self):
-		#avoid
+
 		distance = ua.get_distance()
 		if distance < turn_distance: # turn
+			
 			bw.stop()
+			time.sleep(3)
 
-			print('recule')
+			distance = ua.get_distance()
+			if distance < turn_distance and distance != -1:
 
-			#recule
-			fw.turn_straight()
-			bw.backward()
-			self.accelerate(50)
+				time.sleep(2)
 
-			time.sleep(1.5)
+				#recule
+				fw.turn_straight()
+				self.go(20, f=False)
+				time.sleep(2)
 
-			#ici
+				#maneuvres d'évasion
+				fw.cali_left()
+				self.go(30, v=15)
+				time.sleep(2)
 
-			line = lf.read_digital()
-			while line[0] or line[1] or line[2] or line[3] or line[4] != 1:
+				self.turn90()
+				self.go(1, v=15)
+				time.sleep(3)
+
+				#cherche la ligne
+				fw.turn_right()
+				self.go(34, v=15)
+				
+				bw.speed = 25
+				bw.forward()
+
 				line = lf.read_digital()
+				while any(line):
+					line = lf.read_digital()
+
+				bw.stop()
+				time.sleep(1)
 
 	def rand_dir(self):
 		global last_angle, last_dir
@@ -305,6 +333,6 @@ class demo_AB():
 				dernierAngle = angle
 			
 
-#demo = active_moving()
-demo = demo_AB()
+demo = active_moving()
+#demo = demo_AB()
 demo.run()
