@@ -28,7 +28,6 @@ class blenderObject():
     framerate = 100 #besoin de savoir ça?
     angle = 0
     _dernierePosition = np.array([0,0,0])
-    disableRotation = False
 
     def __init__(self, x, y, z, name="undefined", scene=None, parent=None):
         self.position = np.array([x*self.scale, y*self.scale, z*self.scale], dtype=np.float)
@@ -57,6 +56,9 @@ class blenderObject():
                 self.blenderObj.location = tuple(self.position/self.scale)
                 self.blenderObj.keyframe_insert(data_path="location", index=-1)
                 self.blenderObj.animation_data.action.fcurves[-1].keyframe_points[-1].interpolation = 'LINEAR'
+
+            #initialise la rotation à 0
+            self.rotation(0)
 
             mat = bpy.data.materials.new(name=self.name+self.name_2)
             mat.diffuse_color = (1,1,1, 1)
@@ -166,9 +168,12 @@ class vehicule(blenderObject):
     
     def __init__(self, x,y,z,scene):
         super().__init__(x,y,z, "vehicule", scene)
-        self.bille = bille(x-0.005, y, z+0.020, scene, self.blenderObj)
-        self.sonar = sonar(x-0.065, y, z+0.05, scene, self.blenderObj)
-        self.suiveurligne = CapteurLigne(x-0.065, y, z, scene, self.blenderObj)
+        global frameNb
+        frameNb = 0
+        self.angleVirage = 0
+        self.bille = bille(x, y, z+0.035, scene, self.blenderObj)
+        self.sonar = sonar(x+0.065, y, z+0.05, scene, self.blenderObj)
+        self.suiveurligne = CapteurLigne(x+0.065, y, z, scene, self.blenderObj)
         #ajout du sonar à l'avant
 
     def mouvementLocal(self, deltaPosition, omega=0, t=0, rot=True):
@@ -196,11 +201,9 @@ class vehicule(blenderObject):
 
     def avance(self, vitesse, angleRoue, t, T0):
         if(angleRoue == 0.0):
-            self.angle -= self.angleVirage
             self.angleVirage = 0
             self.mouvementLocal([vitesse, 0, 0])
         else:
-            self.disableRotation = True
             position1 = self.position[:] #[:] pour forcer une copie des valeurs (sinon la valeur de la ref va changer)
             position_BackWheel, omega = self.virage(vitesse*self.framerate, angleRoue, t)
             position2 = (position_BackWheel+T0)-self.position
@@ -251,7 +254,7 @@ class DetecteurLigne(blenderObject):
 #représente le module avec les 5 détecteurs
 class CapteurLigne(blenderObject):
     def __init__(self, x, y, z, scene, parent):
-        super().__init__(x, y, z, "undefined", scene, parent)
+        #super().__init__(x, y, z, "undefined", scene, parent)
         self.detecteurs = []
         self.detecteurs.append(DetecteurLigne(x, y-0.06, z, scene=scene, parent=parent))
         self.detecteurs.append(DetecteurLigne(x, y-0.03, z, scene=scene, parent=parent))
@@ -319,7 +322,14 @@ class blenderManager(Thread):
     _stop = True
     _recule = False
 
+    #pour la sim
+    turning_max = 135
     
+    __speed = 0
+    ## getter method to get the properties using an object
+    def get_speed(self):
+        return self._foward_speed
+
     #l'argument secondes est la durée de la simulation
     def __init__(self, secondes, nomDeLigne):
         super().__init__()
@@ -345,20 +355,22 @@ class blenderManager(Thread):
         bpy.context.scene.frame_end = int(secondes*self.framerate)
         
         self.listeObj = []
-        self.listeObj.append(blenderObject(6, 0, 0, scene=scene))
-        self.listeObj.append(blenderObject(3, 3, 0, scene=scene))
-        self.listeObj.append(blenderObject(3, -3, 0, scene=scene))
+        #self.listeObj.append(blenderObject(6, 0, 0, scene=scene))
+        #self.listeObj.append(blenderObject(3, 3, 0, scene=scene))
+        #self.listeObj.append(blenderObject(3, -3, 0, scene=scene))
 
         self._nombreStep = 0
         self.turn(90)
 
         #crée la ligne
-        ligne = creationLigne.Ligne(nomDeLigne, getattr(creationLigne, nomDeLigne), 2)
+        ligne = creationLigne.Ligne(nomDeLigne, getattr(creationLigne, nomDeLigne), 10)
         self.vehicule.suiveurligne.configureLigne(ligne)
 
 
     def read_digital(self):
-        return self.vehicule.suiveurligne.detection()
+        lecture = self.vehicule.suiveurligne.detection()
+        print(f"{frameNb} {lecture} = read_digital()")
+        return lecture
 
 
     def run(self):
@@ -384,11 +396,11 @@ class blenderManager(Thread):
             tempsEcoule = time.time() - start
             if(tempsEcoule > 1/self.framerate):
                 #c'est peut-être juste un breakpoint aussi, donc pas d'exception on continue
-                print("La simulation n'est pas assez performante, risque d'erreur")
-                print(f"etape {self._nombreStep}")
+                pass
             else:
                 time.sleep((1/self.framerate)-tempsEcoule)
-
+        self.stop()
+        return frameNb, nombreStepAvantLaFin
             #maintenant qu'on a la distance, le convertir en x, y et z
 
     def sleep(self, seconde):
@@ -397,57 +409,97 @@ class blenderManager(Thread):
         while(frameNb < target):
             time.sleep(0.001)
             if(self.is_alive() is not True):
-                return
+                raise Exception("La simulation est over")
 
     def forward(self):
+        global frameNb
+        print(f"{frameNb} forward()")
         self._avance = True
         self._stop = False
         self._recule = False
     
     def backward(self):
+        global frameNb
+        print(f"{frameNb} backward()")
         self._avance = False
         self._stop = False
         self._recule = True
 
     def stop(self):
+        global frameNb
+        print(f"{frameNb} stop()")
         self._avance = False
         self._stop = True
         self._recule = False
 
     #vitesse de 0 à 100
     def set_speed(self, speed):
+        print(f"{frameNb} set_speed({speed}")
         if(speed < 0 or speed > 100):
             raise Exception(f"Vitesse invalide dans set_speed({speed})")
         self._foward_speed = speed/100
 
     def turn(self, angle):
-        if(angle < 45 or angle > 135):
-            raise Exception(f"Angle invalide dans turn({angle})")
+        print(f"{frameNb} turn({angle})")
+            #raise Exception(f"Angle invalide dans turn({angle})")
+        self.vehicule.angle -= self.vehicule.angleVirage
         self._angleRoue = np.radians(angle-90) #-90 pour centrer à 0
-        self._debutVirage = self._nombreStep
+        self._debutVirage = self._nombreStep-1
         self.T0 = copy.deepcopy(self.vehicule.position)
 
+    #à cause que c'est une fonction de la doc...
+    def wait_tile_center(self):
+        global frameNb
+        print(f"{frameNb} wait_tile_center()")
+        while True:
+            lt_status = self.read_digital()
+            if lt_status[2] == 1:
+                break
+            #if(self.is_alive() is not True):
+                #raise Exception("La simulation est over")
+    
+    def turn_straight(self):
+        global frameNb
+        print(f"{frameNb} turn_straight()")
+        self.turn(90)
+
+    def turn_left(self):
+        global frameNb
+        print(f"{frameNb} turn_left()")
+        self.turn(135)
+
+    def turn_right(self):
+        global frameNb
+        print(f"{frameNb} turn_right()")
+        self.turn(45)
+
+    def ready(self):
+        pass
+
     def get_distance(self):
-        return self.vehicule.sonar.detection(self.listeObj)
+        distance = self.vehicule.sonar.detection(self.listeObj)
+        global frameNb
+        #print(f"{self.frameNb}  {distance} = get_distance()")
+        return distance
 
 #L = capteur_sonar.Check(objlist)
 #print(f"obstacle detecte a {L}m")
 
-blender = blenderManager(10, "crochet")
-print("tourne de 45", f" temps = {frameNb}")
-blender.turn(135)
-blender.set_speed(20)
-blender.start()
-blender.forward()
-blender.sleep(1)
-print("avance pour 5s", f" temps = {frameNb}")
-blender.turn(90)
-blender.set_speed(50)
-blender.forward()
-blender.sleep(5)
-print("tourne à 135", f" temps = {frameNb}")
-blender.turn(135)
-blender.set_speed(30)
-blender.forward()
-blender.join()
-print("fini")
+def test():
+    blender = blenderManager(10, "crochet")
+    print("tourne de 45", f" temps = {frameNb}")
+    blender.turn(135)
+    blender.set_speed(20)
+    blender.start()
+    blender.forward()
+    blender.sleep(1)
+    blender.turn(45)
+    blender.sleep(1)
+    blender.sleep(1)
+    blender.turn(45)
+    blender.sleep(1)
+    blender.turn(70)
+    blender.sleep(1)
+    blender.turn(91)
+
+#test()
