@@ -13,9 +13,9 @@
 import sys
 #sinon il trouvera pas les modules custom si on change pas son path d'import
 sys.path.insert(0, r"C:\Users\Alexandre.Bergeron\OneDrive - USherbrooke\university\projet\S5_projet_simulation")
-import sonar
+import vehicule
 
-sim = sonar.blenderManager(30, "crochet")
+sim = vehicule.blenderManager(30, "crochet")
 time = sim
 Line_Follower = sim
 Ultrasonic_Avoidance = sim
@@ -256,8 +256,10 @@ class demo_AB():
 		self.temps = 0
 		self.temps_max = 1
 
-	def follow(self, lecture):
-		
+	def avoid(self):
+		pass
+
+	def follow(self):
 		lecture = lf.read_digital()
 		#if(lecture != derniereLecture):
 		if(lecture[4] == 1):
@@ -284,6 +286,7 @@ class demo_AB():
 		if(sum(lecture) == 5):
 			angle == 90
 			stop()
+		return angle
 
 	def run(self):
 		
@@ -294,36 +297,9 @@ class demo_AB():
 		derniereLecture = [0,0,0,0,0]
 		while(bw.is_alive()):
 			
-			lecture = lf.read_digital()
-			derniereLecture = lecture
-			if(lecture[4] == 1):
-				variation = 10
-				nouvelAngle = angle + variation
-				angle = nouvelAngle if nouvelAngle <= (90+fw.turning_max) else (90+fw.turning_max)
-			if(lecture[3] == 1):
-				variation = 5
-				nouvelAngle = angle + variation
-				angle = nouvelAngle if nouvelAngle <= (90+fw.turning_max) else (90+fw.turning_max)
-			if(lecture[2] == 1):
-				angle = 90
-			if(lecture[1] == 1):
-				variation = 5
-				nouvelAngle = angle - variation
-				angle = nouvelAngle if nouvelAngle >= (90-fw.turning_max) else (90-fw.turning_max)
-			if(lecture[0] == 1):
-				variation = 10
-				nouvelAngle = angle - variation
-				angle = nouvelAngle if nouvelAngle >= (90-fw.turning_max) else (90-fw.turning_max)
-
-			if(sum(lecture) == 0):
-				angle = 90
-			if(sum(lecture) == 5):
-				angle == 90
-				stop()
+			self.follow()
 			
 			#si aucune ligne détecté, avance en ligne droite
-			
-
 			if(angle != dernierAngle):
 				fw.turn(angle) 
 				dernierAngle = angle
