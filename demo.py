@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, r"C:\Users\Alexandre.Bergeron\OneDrive - USherbrooke\university\projet\S5_projet_simulation")
 import vehicule
 
-sim = vehicule.blenderManager(30, "crochet")
+sim = vehicule.blenderManager(60, "crochet")
 time = sim
 Line_Follower = sim
 Ultrasonic_Avoidance = sim
@@ -285,9 +285,20 @@ class demo_AB():
 		self.temps_max = 1
 
 	def avoid(self):
-		pass
+		distance = ua.get_distance()
+		if(distance != -1 and distance < 0.1):
+			fw.turn(45)
+			time.sleep(0.5)
+			fw.turn(135)
+			time.sleep(0.5)
+			fw.turn(90)
+			time.sleep(1)
+			fw.turn(135)
+			time.sleep(0.5)
+			fw.turn(45)
+			time.sleep(0.5)
 
-	def follow(self):
+	def follow(self, angle):
 		lecture = lf.read_digital()
 		#if(lecture != derniereLecture):
 		if(lecture[4] == 1):
@@ -318,14 +329,14 @@ class demo_AB():
 
 	def run(self):
 		
-		bw.set_speed(50)
+		bw.speed = 50
 		bw.forward()
 		angle = 90
 		dernierAngle = 0
 		derniereLecture = [0,0,0,0,0]
 		while(bw.is_alive()):
-			
-			self.follow()
+			#self.avoid()
+			angle = self.follow(angle)
 			
 			#si aucune ligne détecté, avance en ligne droite
 			if(angle != dernierAngle):
@@ -333,6 +344,6 @@ class demo_AB():
 				dernierAngle = angle
 			
 
-demo = active_moving()
-#demo = demo_AB()
+#demo = active_moving()
+demo = demo_AB()
 demo.run()
