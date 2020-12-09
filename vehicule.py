@@ -325,10 +325,19 @@ class blenderManager(Thread):
     #pour la sim
     turning_max = 135
     
-    __speed = 0
+    #_speed = 0
     ## getter method to get the properties using an object
-    def get_speed(self):
+    @property
+    def speed(self):
         return self._foward_speed
+
+        #vitesse de 0 à 100
+    @speed.setter
+    def speed(self, value):
+        print(f"{frameNb} set_speed({value})")
+        if(value < 0 or value > 100):
+            raise Exception(f"Vitesse invalide dans set_speed({value})")
+        self._foward_speed = value/100
 
     #l'argument secondes est la durée de la simulation
     def __init__(self, secondes, nomDeLigne):
@@ -432,13 +441,6 @@ class blenderManager(Thread):
         self._stop = True
         self._recule = False
 
-    #vitesse de 0 à 100
-    def set_speed(self, speed):
-        print(f"{frameNb} set_speed({speed}")
-        if(speed < 0 or speed > 100):
-            raise Exception(f"Vitesse invalide dans set_speed({speed})")
-        self._foward_speed = speed/100
-
     def turn(self, angle):
         print(f"{frameNb} turn({angle})")
             #raise Exception(f"Angle invalide dans turn({angle})")
@@ -473,23 +475,27 @@ class blenderManager(Thread):
         print(f"{frameNb} turn_right()")
         self.turn(45)
 
+    #fonction présente pour minimiser les changements dans le code du picar.
     def ready(self):
         pass
 
+    #Fonction qui retourne -1 ou une distance en mètre d'un obstacle.
     def get_distance(self):
         distance = self.vehicule.sonar.detection(self.listeObj)
         global frameNb
         #print(f"{self.frameNb}  {distance} = get_distance()")
         return distance
+    
+    #fonction setup du pycar (rien à faire pour la sim)
+    def setup(self):
+        pass
 
-#L = capteur_sonar.Check(objlist)
-#print(f"obstacle detecte a {L}m")
 
 def test():
     blender = blenderManager(10, "crochet")
     print("tourne de 45", f" temps = {frameNb}")
     blender.turn(135)
-    blender.set_speed(20)
+    blender.speed = 20
     blender.start()
     blender.forward()
     blender.sleep(1)
@@ -502,4 +508,4 @@ def test():
     blender.sleep(1)
     blender.turn(91)
 
-#test()
+test()
