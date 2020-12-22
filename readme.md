@@ -1,7 +1,6 @@
-Mettre les fichiers blender dans "blender"
+# Simulation du picar S2 sous blender.
 
-Pour la simuation, je pense que si on fait une classe par machin simulé ça pourrait bien allez à intégrer à la toute fin.
-
+Mettre les fichiers blender dans le dossier "blender"
 
 ##  **pour faire un script qui affecte une scène blender:**
 
@@ -37,3 +36,7 @@ Pour faire fonctionner blender avec le script, en ligne de commande:
  ![Image of Yaktocat](markdown/debugger.png)
 
 * Allez dans le fichier python désiré puis ctrl+shift+p: blender run script
+
+
+
+Projet S5 UDES, robot suiveur de ligne, université de sherbrooke
